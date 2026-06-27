@@ -77,6 +77,8 @@ The repo is at $REPO_DIR.
 3. Fix the root cause (not symptoms).
 4. Run affected tests locally to verify.
 5. Commit using conventional commit style: type(scope): message.
+   If this is a follow-up fix, squash/amend into the previous fix commit
+   to keep history clean (one fix commit per CI cycle).
 
 Do NOT exit until all identified failures are fixed and committed.
 PROMPT
