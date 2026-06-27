@@ -14,10 +14,23 @@ CI auto-fix bot. Push → wait for CI → on failure, auto-fix → push → repe
 # Get the bot
 git clone https://github.com/dressedinblack5/oax-tasker ~/oax-tasker
 
-# Use it in any repo
+# Start the auto-fix loop in your project
 cd ~/Projects/your-repo
 ~/oax-tasker/oax-auto
 ```
+
+When you run `oax-auto`, the bot:
+
+1. **Pushes** your latest commits to `dev` branch — this triggers CI
+2. **Waits** for the `test` workflow to finish (blocks until done)
+3. If CI **passes** → exits with success
+4. If CI **fails** → downloads the failure log, runs `openaxe` to auto-fix the tests, commits the fixes, pushes again, and goes back to step 2
+5. Repeats up to 5 cycles, then exits regardless
+
+Your repo needs:
+- A `dev` branch with CI configured (GitHub Actions)
+- A workflow named `test` (the default; edit `oax-wait` and `oax-fix` for a different name)
+- An AI assistant on `PATH` (default: `openaxe`)
 
 ## Scripts
 
