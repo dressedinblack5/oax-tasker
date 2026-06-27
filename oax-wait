@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Watch latest CI run on dev. Exits 0 on pass, non-zero on fail.
+if [ -z "${OAX_RENAMED:-}" ]; then export OAX_RENAMED=1; exec -a oax-wait bash "$0" "$@"; fi
+set -euo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: oax-wait"
+  echo ""
+  echo "Watch latest CI run on dev branch. Exits 0 on pass, non-zero on fail."
+  echo ""
+  echo "Environment:"
+  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  exit 0
+fi
+
+REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
+cd "$REPO_DIR"
+
+# Use the test workflow specifically
+RUN_ID=$(gh run list --branch dev --workflow test --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+if [ -z "$RUN_ID" ]; then
+  echo "No test workflow runs found for dev branch" >&2
+  exit 1
+fi
+
+echo "CI run #$RUN_ID — watching..."
+gh run watch "$RUN_ID" --exit-status 2>&1

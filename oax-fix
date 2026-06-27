@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Download CI failure log and/or run headless fix session.
+if [ -z "${OAX_RENAMED:-}" ]; then export OAX_RENAMED=1; exec -a oax-fix bash "$0" "$@"; fi
+set -euo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: oax-fix [--download-only | <logfile>]"
+  echo ""
+  echo "Download CI failure log and/or run headless fix session with openaxe."
+  echo ""
+  echo "  --download-only   Download latest CI log to logs/ dir, print path"
+  echo "  <logfile>         Run openaxe on the given CI log to fix failures"
+  echo ""
+  echo "Environment:"
+  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
+LOGS_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOGS_DIR"
+
+if [ "${1:-}" = "--download-only" ]; then
+  cd "$REPO_DIR"
+  TS=$(date +%s)
+  LOGFILE="$LOGS_DIR/ci-fail-$TS.log"
+  RUN_ID=$(gh run list --branch dev --workflow test --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+  if [ -z "$RUN_ID" ]; then
+    echo "No test workflow runs found for dev branch" >&2
+    exit 1
+  fi
+  # Try failed jobs first, fall back to full log
+  gh run view "$RUN_ID" --log-failed > "$LOGFILE" 2>/dev/null
+  if [ ! -s "$LOGFILE" ]; then
+    gh run view "$RUN_ID" --log > "$LOGFILE" 2>/dev/null
+  fi
+  if [ ! -s "$LOGFILE" ]; then
+    echo "Failed to download CI log" >&2
+    exit 1
+  fi
+  echo "$LOGFILE"
+  exit 0
+fi
+
+LOGFILE="${1:-}"
+if [ -z "$LOGFILE" ] || [ ! -f "$LOGFILE" ]; then
+  echo "Usage: oax-fix [--download-only | <logfile>]" >&2
+  exit 1
+fi
+
+cd "$REPO_DIR"
+SIZE=$(wc -c < "$LOGFILE" | tr -d ' ')
+echo "Fix session — log: $LOGFILE (${SIZE}B)"
+
+# Trim log to 100KB if larger (token economy)
+if [ "$SIZE" -gt 102400 ]; then
+  TRIMMED="$LOGFILE.trimmed"
+  tail -c 102400 "$LOGFILE" > "$TRIMMED"
+  LOGFILE="$TRIMMED"
+  echo "Log trimmed to last 100KB"
+fi
+
+openaxe run \
+  --dangerously-skip-permissions \
+  --dir "$REPO_DIR" \
+  --file "$LOGFILE" \
+  "Fix the CI test failures from the attached log.
+The repo is at $REPO_DIR.
+
+1. Read the CI log and identify which tests failed and why.
+2. Read each failing test file, trace the root cause in source code.
+3. Fix the root cause (not symptoms).
+4. Run the affected tests locally to verify.
+5. Commit using conventional commit style: type(scope): message
+
+Do NOT exit until all identified failures are fixed and committed."

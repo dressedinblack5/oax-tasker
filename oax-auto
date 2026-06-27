@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# CI auto-fix loop: push → wait → on failure, fix → push → repeat until green.
+if [ -z "${OAX_RENAMED:-}" ]; then export OAX_RENAMED=1; exec -a oax-auto bash "$0" "$@"; fi
+set -euo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: oax-auto"
+  echo ""
+  echo "CI auto-fix loop. Pushes current branch, waits for CI, fixes failures."
+  echo ""
+  echo "Environment:"
+  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  echo ""
+  echo "Requires: gh, git, openaxe"
+  exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
+
+for cmd in gh git openaxe; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Missing dependency: $cmd — install it first." >&2
+    exit 1
+  fi
+done
+ITER=0
+START_EPOCH=$(date +%s)
+
+cleanup() {
+  echo ""
+  echo "Interrupted. Exiting."
+  exit 1
+}
+trap cleanup INT TERM
+
+cd "$REPO_DIR"
+
+echo "oax-auto — CI fix loop"
+echo "  repo: $REPO_DIR"
+echo "  branch: dev"
+  echo "  started: $(date -d @$START_EPOCH)"
+echo ""
+
+while true; do
+  ITER=$((ITER + 1))
+  TS=$(date +%H:%M:%S)
+
+  # Step 1: fetch latest remote state
+  echo "━━━ [$TS] [$ITER] Fetching origin ━━━"
+  git fetch origin 2>&1 || true
+
+  # Step 2: push
+  echo "━━━ [$TS] [$ITER] Pushing to dev ━━━"
+  "$SCRIPT_DIR/oax-push" || {
+    echo "Push failed — aborting." >&2
+    exit 1
+  }
+
+  # Step 3: wait for CI
+  echo "━━━ [$TS] [$ITER] Waiting for CI ━━━"
+  if "$SCRIPT_DIR/oax-wait"; then
+    ELAPSED=$(( $(date +%s) - START_EPOCH ))
+    echo ""
+    echo "════════════════════════════════════════════"
+    echo "  CI PASSED after ${ELAPSED}s 🎉"
+    echo "════════════════════════════════════════════"
+    exit 0
+  fi
+
+  # Step 4: download CI log
+  TS=$(date +%H:%M:%S)
+  echo ""
+  echo "━━━ [$TS] [$ITER] CI FAILED — downloading log ━━━"
+  LOGFILE=$("$SCRIPT_DIR/oax-fix" --download-only) || {
+    echo "Failed to download CI log — retrying push." >&2
+    continue
+  }
+  echo "Log: $LOGFILE"
+
+  # Step 5: run fix session (allow failure)
+  TS=$(date +%H:%M:%S)
+  echo ""
+  echo "━━━ [$TS] [$ITER] Running fix session ━━━"
+  "$SCRIPT_DIR/oax-fix" "$LOGFILE" || {
+    echo "Fix session exited with error — checking for partial fixes." >&2
+  }
+
+  # Step 6: check for new commits
+  TS=$(date +%H:%M:%S)
+  echo ""
+  echo "━━━ [$TS] [$ITER] Checking for new commits ━━━"
+  git fetch origin 2>&1 || true
+  NEW_COMMITS=$(git log origin/dev..HEAD --oneline 2>/dev/null || true)
+  if [ -z "$NEW_COMMITS" ]; then
+    echo "No new commits. Aborting."
+    exit 1
+  fi
+
+  echo "New commits:"
+  echo "$NEW_COMMITS"
+  echo ""
+  echo "Pushing fixes..."
+  git push origin dev || {
+    echo "Push failed — aborting." >&2
+    exit 1
+  }
+  echo "Going to next iteration."
+done
+
+ELAPSED=$(( $(date +%s) - START_EPOCH ))
+echo "Reached end of while loop unexpectedly after ${ELAPSED}s"
+exit 1
