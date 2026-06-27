@@ -66,35 +66,23 @@ if [ "$SIZE" -gt 102400 ]; then
   echo "Log trimmed to last 100KB"
 fi
 
-# Write prompt to a temp file for non-openaxe assistants
-PROMPT_FILE=$(mktemp)
-cat > "$PROMPT_FILE" << PROMPT
-Fix the CI test failures from the attached log at $LOGFILE.
-The repo is at $REPO_DIR.
-
-1. Read the CI log and identify which tests failed and why.
-2. Read each failing test file, trace the root cause in source code.
-3. Fix the root cause (not symptoms).
-4. Run affected tests locally to verify.
-5. Commit using conventional commit style: type(scope): message.
-   If this is a follow-up fix, squash/amend into the previous fix commit
-   to keep history clean (one fix commit per CI cycle).
-
-Do NOT exit until all identified failures are fixed and committed.
-PROMPT
+PROMPT="Fix the CI test failures from the attached log at $LOGFILE. The repo is at $REPO_DIR. Read the log, trace root causes in source, fix them, run tests locally to verify, commit using conventional commit style. If this is a follow-up fix, squash/amend into the previous fix commit."
 
 if [ -n "${OAX_AI_CMD:-}" ]; then
   # Custom assistant command — substitutes {logfile}, {repodir}, {promptfile}
+  # Write prompt to a file so {promptfile} can be used
+  PROMPT_FILE=$(mktemp)
+  printf '%s\n' "$PROMPT" > "$PROMPT_FILE"
   CMD="${OAX_AI_CMD//\{logfile\}/$LOGFILE}"
   CMD="${CMD//\{repodir\}/$REPO_DIR}"
   CMD="${CMD//\{promptfile\}/$PROMPT_FILE}"
   eval "$CMD"
+  rm -f "$PROMPT_FILE"
 else
-  # Default: openaxe
+  # Default: openaxe — single-line positional arg avoids yargs multi-line edge case
   openaxe run \
     --dangerously-skip-permissions \
     --dir "$REPO_DIR" \
     --file "$LOGFILE" \
-    "$(cat "$PROMPT_FILE")"
+    "$PROMPT"
 fi
-rm -f "$PROMPT_FILE"
