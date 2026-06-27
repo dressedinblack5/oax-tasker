@@ -70,7 +70,6 @@ PROMPT="Fix the CI test failures from the attached log at $LOGFILE. The repo is 
 
 if [ -n "${OAX_AI_CMD:-}" ]; then
   # Custom assistant command — substitutes {logfile}, {repodir}, {promptfile}
-  # Write prompt to a file so {promptfile} can be used
   PROMPT_FILE=$(mktemp)
   printf '%s\n' "$PROMPT" > "$PROMPT_FILE"
   CMD="${OAX_AI_CMD//\{logfile\}/$LOGFILE}"
@@ -79,10 +78,9 @@ if [ -n "${OAX_AI_CMD:-}" ]; then
   eval "$CMD"
   rm -f "$PROMPT_FILE"
 else
-  # Default: openaxe — single-line positional arg avoids yargs multi-line edge case
-  openaxe run \
+  # Default: openaxe — pipe prompt via stdin (positional args are file paths)
+  printf '%s\n' "$PROMPT" | openaxe run \
     --dangerously-skip-permissions \
     --dir "$REPO_DIR" \
-    --file "$LOGFILE" \
-    "$PROMPT"
+    --file "$LOGFILE"
 fi
