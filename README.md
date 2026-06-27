@@ -21,15 +21,14 @@ cd ~/Projects/your-repo
 
 When you run `oax-auto`, the bot:
 
-1. **Pushes** your latest commits to `dev` branch — this triggers CI
+1. **Pushes** your latest commits to the current branch — triggers CI
 2. **Waits** for the `test` workflow to finish (blocks until done)
 3. If CI **passes** → exits with success
-4. If CI **fails** → downloads the failure log, runs `openaxe` to auto-fix the tests, commits the fixes, pushes again, and goes back to step 2
+4. If CI **fails** → downloads the failure log, runs the AI assistant to auto-fix the tests, commits the fixes, pushes again, and goes back to step 2
 5. Repeats up to 5 cycles, then exits regardless
 
 Your repo needs:
-- A `dev` branch with CI configured (GitHub Actions)
-- A workflow named `test` (the default; edit `oax-wait` and `oax-fix` for a different name)
+- A GitHub Actions workflow (default name: `test`)
 - An AI assistant on `PATH` (default: `openaxe`)
 
 ## Scripts
@@ -67,6 +66,8 @@ oax-fix "$LOGFILE"
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `OAX_REPO_DIR` | current dir | Path to the git repo |
+| `OAX_BRANCH` | current branch | Target branch for push & CI watch |
+| `OAX_WORKFLOW` | `test` | GitHub Actions workflow name |
 | `OAX_AI_CMD` | `openaxe run ...` | AI assistant command template |
 
 The bot works with any AI coding assistant. Set `OAX_AI_CMD` to a command with `{logfile}`, `{repodir}`, and `{promptfile}` placeholders:

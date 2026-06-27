@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# Watch latest CI run on dev. Exits 0 on pass, non-zero on fail.
+# Watch latest CI run on a branch. Exits 0 on pass, non-zero on fail.
 if [ -z "${OAX_RENAMED:-}" ]; then export OAX_RENAMED=1; exec -a oax-wait bash "$0" "$@"; fi
 set -euo pipefail
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo "Usage: oax-wait"
   echo ""
-  echo "Watch latest CI run on dev branch. Exits 0 on pass, non-zero on fail."
+  echo "Watch latest CI run on a branch. Exits 0 on pass, non-zero on fail."
   echo ""
   echo "Environment:"
-  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  echo "  OAX_REPO_DIR    Repo path (default: current dir)"
+  echo "  OAX_BRANCH      Target branch (default: current branch)"
+  echo "  OAX_WORKFLOW    GitHub workflow name (default: test)"
   exit 0
 fi
 
 REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
 cd "$REPO_DIR"
+BRANCH="${OAX_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+WORKFLOW="${OAX_WORKFLOW:-test}"
 
-# Use the test workflow specifically
-RUN_ID=$(gh run list --branch dev --workflow test --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+RUN_ID=$(gh run list --branch "$BRANCH" --workflow "$WORKFLOW" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
 if [ -z "$RUN_ID" ]; then
-  echo "No test workflow runs found for dev branch" >&2
+  echo "No \"$WORKFLOW\" workflow runs found for branch \"$BRANCH\"" >&2
   exit 1
 fi
 
-echo "CI run #$RUN_ID — watching..."
+echo "CI run #$RUN_ID ($WORKFLOW on $BRANCH) — watching..."
 gh run watch "$RUN_ID" --exit-status 2>&1

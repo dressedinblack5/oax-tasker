@@ -12,8 +12,10 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo "  <logfile>         Run AI assistant on the given CI log to fix failures"
   echo ""
   echo "Environment:"
-  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
-  echo "  OAX_AI_CMD     AI assistant command (default: openaxe run ...)"
+  echo "  OAX_REPO_DIR    Repo path (default: current dir)"
+  echo "  OAX_BRANCH      Target branch (default: repo default)"
+  echo "  OAX_WORKFLOW    GitHub workflow name (default: test)"
+  echo "  OAX_AI_CMD      AI assistant command (default: openaxe run ...)"
   exit 0
 fi
 
@@ -24,9 +26,11 @@ mkdir -p "$LOGS_DIR"
 
 if [ "${1:-}" = "--download-only" ]; then
   cd "$REPO_DIR"
+  BRANCH="${OAX_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+  WORKFLOW="${OAX_WORKFLOW:-test}"
   TS=$(date +%s)
   LOGFILE="$LOGS_DIR/ci-fail-$TS.log"
-  RUN_ID=$(gh run list --branch dev --workflow test --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+  RUN_ID=$(gh run list --branch "$BRANCH" --workflow "$WORKFLOW" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
   if [ -z "$RUN_ID" ]; then
     echo "No test workflow runs found for dev branch" >&2
     exit 1

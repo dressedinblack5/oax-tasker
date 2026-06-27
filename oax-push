@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# Push to dev, record SHA
+# Push current branch to remote, record SHA.
 if [ -z "${OAX_RENAMED:-}" ]; then export OAX_RENAMED=1; exec -a oax-push bash "$0" "$@"; fi
 set -euo pipefail
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo "Usage: oax-push"
   echo ""
-  echo "Push HEAD to dev, record SHA to /tmp/oax-last-sha."
+  echo "Push HEAD to remote branch, record SHA to /tmp/oax-last-sha."
   echo ""
   echo "Environment:"
   echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  echo "  OAX_BRANCH     Target branch (default: current branch)"
   exit 0
 fi
 
 REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
 cd "$REPO_DIR"
+BRANCH="${OAX_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 
 COMMIT_SHA=$(git rev-parse HEAD)
-echo "Pushing $COMMIT_SHA to dev..."
+echo "Pushing $COMMIT_SHA to $BRANCH..."
 
-if git push origin dev 2>&1; then
+if git push origin HEAD:"$BRANCH" 2>&1; then
   echo "$COMMIT_SHA" > /tmp/oax-last-sha
   echo "Push succeeded."
 else

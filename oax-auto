@@ -10,6 +10,8 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo ""
   echo "Environment:"
   echo "  OAX_REPO_DIR    Repo path (default: current dir)"
+  echo "  OAX_BRANCH      Target branch (default: current branch)"
+  echo "  OAX_WORKFLOW    GitHub workflow name (default: test)"
   echo "  OAX_AI_CMD      AI assistant command (default: openaxe run ...)"
   echo ""
   echo "Requires: gh, git, an AI assistant (openaxe, claude, codex, ...)"
@@ -26,6 +28,11 @@ for cmd in gh git "$AI_CMD"; do
     exit 1
   fi
 done
+
+cd "$REPO_DIR"
+BRANCH="${OAX_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+WORKFLOW="${OAX_WORKFLOW:-test}"
+
 ITER=0
 START_EPOCH=$(date +%s)
 
@@ -36,12 +43,11 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-cd "$REPO_DIR"
-
 echo "oax-auto — CI fix loop"
-echo "  repo: $REPO_DIR"
-echo "  branch: dev"
-  echo "  started: $(date -d @$START_EPOCH)"
+echo "  repo:     $REPO_DIR"
+echo "  branch:   $BRANCH"
+echo "  workflow: $WORKFLOW"
+echo "  started:  $(date -d @$START_EPOCH)"
 echo ""
 
 while true; do
@@ -52,16 +58,20 @@ while true; do
   echo "━━━ [$TS] [$ITER] Fetching origin ━━━"
   git fetch origin 2>&1 || true
 
-  # Step 2: push
-  echo "━━━ [$TS] [$ITER] Pushing to dev ━━━"
-  "$SCRIPT_DIR/oax-push" || {
+  # Step 2: pull latest to avoid non-fast-forward rejection
+  echo "━━━ [$TS] [$ITER] Pulling origin/$BRANCH ━━━"
+  git pull --rebase origin "$BRANCH" 2>&1 || true
+
+  # Step 3: push
+  echo "━━━ [$TS] [$ITER] Pushing to $BRANCH ━━━"
+  OAX_BRANCH="$BRANCH" "$SCRIPT_DIR/oax-push" || {
     echo "Push failed — aborting." >&2
     exit 1
   }
 
-  # Step 3: wait for CI
+  # Step 4: wait for CI
   echo "━━━ [$TS] [$ITER] Waiting for CI ━━━"
-  if "$SCRIPT_DIR/oax-wait"; then
+  if OAX_BRANCH="$BRANCH" OAX_WORKFLOW="$WORKFLOW" "$SCRIPT_DIR/oax-wait"; then
     ELAPSED=$(( $(date +%s) - START_EPOCH ))
     echo ""
     echo "════════════════════════════════════════════"
@@ -70,30 +80,30 @@ while true; do
     exit 0
   fi
 
-  # Step 4: download CI log
+  # Step 5: download CI log
   TS=$(date +%H:%M:%S)
   echo ""
   echo "━━━ [$TS] [$ITER] CI FAILED — downloading log ━━━"
-  LOGFILE=$("$SCRIPT_DIR/oax-fix" --download-only) || {
+  LOGFILE=$(OAX_BRANCH="$BRANCH" OAX_WORKFLOW="$WORKFLOW" "$SCRIPT_DIR/oax-fix" --download-only) || {
     echo "Failed to download CI log — retrying push." >&2
     continue
   }
   echo "Log: $LOGFILE"
 
-  # Step 5: run fix session (allow failure)
+  # Step 6: run fix session (allow failure)
   TS=$(date +%H:%M:%S)
   echo ""
   echo "━━━ [$TS] [$ITER] Running fix session ━━━"
-  "$SCRIPT_DIR/oax-fix" "$LOGFILE" || {
+  OAX_BRANCH="$BRANCH" OAX_WORKFLOW="$WORKFLOW" "$SCRIPT_DIR/oax-fix" "$LOGFILE" || {
     echo "Fix session exited with error — checking for partial fixes." >&2
   }
 
-  # Step 6: check for new commits
+  # Step 7: check for new commits
   TS=$(date +%H:%M:%S)
   echo ""
   echo "━━━ [$TS] [$ITER] Checking for new commits ━━━"
   git fetch origin 2>&1 || true
-  NEW_COMMITS=$(git log origin/dev..HEAD --oneline 2>/dev/null || true)
+  NEW_COMMITS=$(git log "origin/$BRANCH..HEAD" --oneline 2>/dev/null || true)
   if [ -z "$NEW_COMMITS" ]; then
     echo "No new commits. Aborting."
     exit 1
@@ -103,7 +113,7 @@ while true; do
   echo "$NEW_COMMITS"
   echo ""
   echo "Pushing fixes..."
-  git push origin dev || {
+  git push origin "$BRANCH" || {
     echo "Push failed — aborting." >&2
     exit 1
   }
