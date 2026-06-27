@@ -2,7 +2,7 @@
 
 CI auto-fix bot. Push → wait → CI fails → auto-fix → push → repeat until green.
 
-Works with **any** AI coding assistant: openaxe, Claude Code, Codex, Cline, etc.
+Works with **any** AI coding assistant: OpenCode, Claude Code, Codex, Cline, etc.
 
 ## Quick start
 
