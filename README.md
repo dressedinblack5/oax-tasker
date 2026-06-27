@@ -67,7 +67,20 @@ oax-fix "$LOGFILE"
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `OAX_REPO_DIR` | current dir | Path to the git repo |
+| `OAX_AI_CMD` | `openaxe run ...` | AI assistant command template |
+
+The bot works with any AI coding assistant. Set `OAX_AI_CMD` to a command with `{logfile}`, `{repodir}`, and `{promptfile}` placeholders:
 
 ```bash
+# Claude Code
+OAX_AI_CMD='claude --allowedTools "Bash,Write,Read" --file "{logfile}" -p "$(cat {promptfile})"' oax-auto
+
+# Codex
+OAX_AI_CMD='codex -f "{logfile}" "$(cat {promptfile})"' oax-auto
+
+# Cline
+OAX_AI_CMD='cline --file "{logfile}" --prompt "$(cat {promptfile})"' oax-auto
+
+# Default (openaxe)
 OAX_REPO_DIR=/path/to/project oax-auto
 ```

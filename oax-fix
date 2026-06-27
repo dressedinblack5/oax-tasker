@@ -6,13 +6,14 @@ set -euo pipefail
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo "Usage: oax-fix [--download-only | <logfile>]"
   echo ""
-  echo "Download CI failure log and/or run headless fix session with openaxe."
+  echo "Download CI failure log and/or run headless fix session."
   echo ""
   echo "  --download-only   Download latest CI log to logs/ dir, print path"
-  echo "  <logfile>         Run openaxe on the given CI log to fix failures"
+  echo "  <logfile>         Run AI assistant on the given CI log to fix failures"
   echo ""
   echo "Environment:"
   echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  echo "  OAX_AI_CMD     AI assistant command (default: openaxe run ...)"
   exit 0
 fi
 
@@ -61,17 +62,33 @@ if [ "$SIZE" -gt 102400 ]; then
   echo "Log trimmed to last 100KB"
 fi
 
-openaxe run \
-  --dangerously-skip-permissions \
-  --dir "$REPO_DIR" \
-  --file "$LOGFILE" \
-  "Fix the CI test failures from the attached log.
+# Write prompt to a temp file for non-openaxe assistants
+PROMPT_FILE=$(mktemp)
+cat > "$PROMPT_FILE" << PROMPT
+Fix the CI test failures from the attached log at $LOGFILE.
 The repo is at $REPO_DIR.
 
 1. Read the CI log and identify which tests failed and why.
 2. Read each failing test file, trace the root cause in source code.
 3. Fix the root cause (not symptoms).
-4. Run the affected tests locally to verify.
-5. Commit using conventional commit style: type(scope): message
+4. Run affected tests locally to verify.
+5. Commit using conventional commit style: type(scope): message.
 
-Do NOT exit until all identified failures are fixed and committed."
+Do NOT exit until all identified failures are fixed and committed.
+PROMPT
+
+if [ -n "${OAX_AI_CMD:-}" ]; then
+  # Custom assistant command — substitutes {logfile}, {repodir}, {promptfile}
+  CMD="${OAX_AI_CMD//\{logfile\}/$LOGFILE}"
+  CMD="${CMD//\{repodir\}/$REPO_DIR}"
+  CMD="${CMD//\{promptfile\}/$PROMPT_FILE}"
+  eval "$CMD"
+else
+  # Default: openaxe
+  openaxe run \
+    --dangerously-skip-permissions \
+    --dir "$REPO_DIR" \
+    --file "$LOGFILE" \
+    "$(cat "$PROMPT_FILE")"
+fi
+rm -f "$PROMPT_FILE"

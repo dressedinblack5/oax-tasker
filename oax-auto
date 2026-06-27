@@ -9,16 +9,18 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   echo "CI auto-fix loop. Pushes current branch, waits for CI, fixes failures."
   echo ""
   echo "Environment:"
-  echo "  OAX_REPO_DIR   Repo path (default: current dir)"
+  echo "  OAX_REPO_DIR    Repo path (default: current dir)"
+  echo "  OAX_AI_CMD      AI assistant command (default: openaxe run ...)"
   echo ""
-  echo "Requires: gh, git, openaxe"
+  echo "Requires: gh, git, an AI assistant (openaxe, claude, codex, ...)"
   exit 0
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
 
-for cmd in gh git openaxe; do
+AI_CMD="${OAX_AI_CMD%% *}"  # extract binary name from template
+for cmd in gh git "$AI_CMD"; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "Missing dependency: $cmd — install it first." >&2
     exit 1
