@@ -21,7 +21,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${OAX_REPO_DIR:-$(pwd)}"
 
-AI_CMD="${OAX_AI_CMD%% *}"  # extract binary name from template
+AI_CMD="${OAX_AI_CMD:-openaxe}"
+AI_CMD="${AI_CMD%% *}"  # extract binary name from template
 for cmd in gh git "$AI_CMD"; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "Missing dependency: $cmd — install it first." >&2
